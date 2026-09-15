@@ -108,4 +108,51 @@ class AuthController extends Controller
     {
         return response()->json($request->user());
     }
+
+    public function updateProfile(Request $request)
+    {
+        $user = $request->user();
+
+        $validator = Validator::make($request->all(), [
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|email|max:255|unique:users,email,'.$user->id,
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $user->update([
+            'name' => $request->name,
+            'email' => $request->email,
+        ]);
+
+        return response()->json($user->fresh());
+    }
+
+    public function changePassword(Request $request)
+    {
+        $user = $request->user();
+
+        $rules = [
+            'password' => ['required', 'confirmed', Password::min(8)],
+        ];
+        if ($user->password) {
+            $rules['current_password'] = 'required|string';
+        }
+
+        $validator = Validator::make($request->all(), $rules);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        if ($user->password && ! Hash::check($request->current_password, $user->password)) {
+            return response()->json(['errors' => ['current_password' => ['Password saat ini salah']]], 422);
+        }
+
+        $user->update(['password' => Hash::make($request->password)]);
+
+        return response()->json(['message' => 'Password berhasil diubah']);
+    }
 }
