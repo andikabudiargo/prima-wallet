@@ -253,6 +253,45 @@ class DebtService
     }
 
     /**
+     * Tandai satu cicilan lunas/belum secara historis - dipakai saat hutang
+     * dicatat setelah cicilannya berjalan di dunia nyata (mis. sudah dibayar
+     * beberapa bulan sebelum masuk app). TIDAK membuat transaksi kas atau
+     * mengubah saldo dompet manapun, murni update status catatan.
+     *
+     * Ditolak kalau cicilan itu sudah pernah terkait transaksi kas asli
+     * (dibayar lewat payInstallment/payOff), supaya riwayat kas tetap akurat -
+     * pembatalannya harus lewat proses pembayaran biasa.
+     */
+    public function markInstallmentHistorical(DebtInstallment $installment, bool $paid): void
+    {
+        if ($installment->transactions()->exists()) {
+            throw new \RuntimeException(
+                'Cicilan ini sudah punya transaksi kas, tidak bisa diubah manual. Gunakan menu pembayaran biasa.'
+            );
+        }
+
+        DB::transaction(function () use ($installment, $paid) {
+            if ($paid) {
+                $installment->amount_paid = $installment->amount_due;
+                $installment->status = 'paid';
+                $installment->paid_at = $installment->due_date;
+            } else {
+                $installment->amount_paid = 0;
+                $installment->status = Carbon::parse($installment->due_date)->isPast() ? 'overdue' : 'upcoming';
+                $installment->paid_at = null;
+            }
+            $installment->save();
+
+            $debt = $installment->debt;
+            $debt->paid_amount = $debt->installments()->sum('amount_paid');
+            $debt->status = $debt->installments()->where('status', '!=', 'paid')->doesntExist()
+                ? 'paid_off'
+                : 'active';
+            $debt->save();
+        });
+    }
+
+    /**
      * Dipanggil dari scheduled command harian: tandai cicilan yang telat
      * sebagai overdue, lalu proses auto-debet untuk hutang yang mengaktifkannya.
      */

@@ -13,7 +13,7 @@ class Debt extends Model
     protected $fillable = [
         'user_id', 'type', 'party_name', 'principal_amount', 'interest_type',
         'interest_rate', 'total_amount', 'paid_amount', 'tenor_months',
-        'start_date', 'due_day', 'wallet_id', 'auto_debet', 'auto_wallet_id',
+        'start_date', 'due_day', 'wallet_id', 'disburses_to_wallet', 'auto_debet', 'auto_wallet_id',
         'status', 'notes', 'evidence_path', 'created_by',
     ];
 
@@ -22,7 +22,8 @@ class Debt extends Model
         'interest_rate' => 'decimal:2',
         'total_amount' => 'decimal:2',
         'paid_amount' => 'decimal:2',
-        'start_date' => 'date',
+        'start_date' => 'date:Y-m-d',
+        'disburses_to_wallet' => 'boolean',
         'auto_debet' => 'boolean',
         'tenor_months' => 'integer',
         'due_day' => 'integer',

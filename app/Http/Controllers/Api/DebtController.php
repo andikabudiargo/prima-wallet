@@ -36,6 +36,12 @@ class DebtController extends Controller
     {
         $isHutang = $request->input('type') === 'hutang';
 
+        // disburses_to_wallet default true supaya klien lama (yang belum kirim
+        // field ini) tetap berperilaku seperti sebelumnya: pencairan dana penuh.
+        $disbursesToWallet = $request->has('disburses_to_wallet')
+            ? $request->boolean('disburses_to_wallet')
+            : true;
+
         $validator = Validator::make($request->all(), [
             'type' => 'required|in:hutang,piutang',
             'party_name' => 'required|string|max:150',
@@ -45,23 +51,32 @@ class DebtController extends Controller
             'tenor_months' => 'required|integer|min:1|max:360',
             'start_date' => 'required|date',
             'due_day' => 'required|integer|min:1|max:31',
-            'wallet_id' => 'required|exists:wallets,id',
+            'disburses_to_wallet' => 'nullable|boolean',
+            'wallet_id' => $disbursesToWallet ? 'required|exists:wallets,id' : 'nullable|exists:wallets,id',
             'auto_debet' => 'nullable|boolean',
             'auto_wallet_id' => 'required_if:auto_debet,1,true|nullable|exists:wallets,id',
             'notes' => 'nullable|string|max:255',
             'evidence' => 'nullable|image|max:5120',
+            // nomor cicilan yang sudah lunas di dunia nyata sebelum dicatat di
+            // app (mis. hutang dicatat setelah jalan 3 bulan) - ditandai lunas
+            // tanpa transaksi kas/pengaruh saldo dompet.
+            'paid_installments' => 'nullable|array',
+            'paid_installments.*' => 'integer|min:1',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $wallet = \App\Models\Wallet::where('id', $request->wallet_id)
-            ->where('user_id', $request->user()->id)
-            ->first();
+        $wallet = null;
+        if ($disbursesToWallet) {
+            $wallet = \App\Models\Wallet::where('id', $request->wallet_id)
+                ->where('user_id', $request->user()->id)
+                ->first();
 
-        if (! $wallet) {
-            return response()->json(['message' => 'Dompet tidak ditemukan'], 404);
+            if (! $wallet) {
+                return response()->json(['message' => 'Dompet tidak ditemukan'], 404);
+            }
         }
 
         $autoDebet = $isHutang && $request->boolean('auto_debet');
@@ -81,7 +96,7 @@ class DebtController extends Controller
             $evidencePath = $request->file('evidence')->store('debt-evidence', 'public');
         }
 
-        $debt = DB::transaction(function () use ($request, $wallet, $autoDebet, $evidencePath) {
+        $debt = DB::transaction(function () use ($request, $wallet, $disbursesToWallet, $autoDebet, $evidencePath) {
             $debt = Debt::create([
                 'user_id' => $request->user()->id,
                 'type' => $request->type,
@@ -92,7 +107,8 @@ class DebtController extends Controller
                 'tenor_months' => $request->tenor_months,
                 'start_date' => $request->start_date,
                 'due_day' => $request->due_day,
-                'wallet_id' => $wallet->id,
+                'wallet_id' => $wallet?->id,
+                'disburses_to_wallet' => $disbursesToWallet,
                 'auto_debet' => $autoDebet,
                 'auto_wallet_id' => $autoDebet ? $request->auto_wallet_id : null,
                 'notes' => $request->notes,
@@ -101,7 +117,17 @@ class DebtController extends Controller
             ]);
 
             $this->debtService->generateSchedule($debt);
-            $this->debtService->disburse($debt);
+
+            if ($disbursesToWallet) {
+                $this->debtService->disburse($debt);
+            }
+
+            foreach ($request->input('paid_installments', []) as $installmentNumber) {
+                $installment = $debt->installments()->where('installment_number', $installmentNumber)->first();
+                if ($installment) {
+                    $this->debtService->markInstallmentHistorical($installment, true);
+                }
+            }
 
             return $debt;
         });
@@ -115,7 +141,10 @@ class DebtController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        return response()->json($debt->load(['installments', 'wallet', 'autoWallet', 'transactions']));
+        return response()->json($debt->load([
+            'installments' => fn ($q) => $q->withCount('transactions'),
+            'wallet', 'autoWallet', 'transactions',
+        ]));
     }
 
     public function destroy(Request $request, Debt $debt)
@@ -202,6 +231,36 @@ class DebtController extends Controller
         return response()->json([
             'transaction' => $transaction,
             'debt' => $debt->fresh(['installments']),
+        ]);
+    }
+
+    /**
+     * Tandai/batalkan status lunas satu cicilan secara historis, tanpa
+     * transaksi kas - untuk hutang/piutang yang dicatat setelah cicilannya
+     * berjalan di dunia nyata.
+     */
+    public function markInstallmentHistorical(Request $request, DebtInstallment $installment)
+    {
+        if ($installment->debt->user_id !== $request->user()->id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'paid' => 'required|boolean',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        try {
+            $this->debtService->markInstallmentHistorical($installment, $request->boolean('paid'));
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'debt' => $installment->debt->fresh(['installments' => fn ($q) => $q->withCount('transactions')]),
         ]);
     }
 }

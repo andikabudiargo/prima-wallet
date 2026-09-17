@@ -16,7 +16,7 @@ class Target extends Model
 
     protected $casts = [
         'target_amount' => 'decimal:2',
-        'deadline' => 'date',
+        'deadline' => 'date:Y-m-d',
     ];
 
     public function user()

@@ -32,6 +32,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('debts', DebtController::class)->except(['update']);
     Route::post('/debts/{debt}/pay-off', [DebtController::class, 'payOff']);
     Route::post('/debt-installments/{installment}/pay', [DebtController::class, 'payInstallment']);
+    Route::patch('/debt-installments/{installment}/historical', [DebtController::class, 'markInstallmentHistorical']);
 
     Route::apiResource('budgets', BudgetController::class)->only(['index', 'store', 'destroy']);
     Route::apiResource('income-estimates', IncomeEstimateController::class)->only(['index', 'store', 'destroy']);

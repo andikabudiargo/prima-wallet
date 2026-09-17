@@ -16,7 +16,7 @@ class Transfer extends Model
 
     protected $casts = [
         'amount' => 'decimal:2',
-        'transfer_date' => 'date',
+        'transfer_date' => 'date:Y-m-d',
     ];
 
     public function user()

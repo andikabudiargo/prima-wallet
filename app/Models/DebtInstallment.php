@@ -12,7 +12,7 @@ class DebtInstallment extends Model
     ];
 
     protected $casts = [
-        'due_date' => 'date',
+        'due_date' => 'date:Y-m-d',
         'amount_due' => 'decimal:2',
         'amount_paid' => 'decimal:2',
         'paid_at' => 'datetime',

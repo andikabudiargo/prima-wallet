@@ -15,7 +15,7 @@ class TargetContribution extends Model
 
     protected $casts = [
         'amount' => 'decimal:2',
-        'contribution_date' => 'date',
+        'contribution_date' => 'date:Y-m-d',
     ];
 
     public function target()
