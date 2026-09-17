@@ -28,6 +28,7 @@ class CategoryController extends Controller
             'type' => 'required|in:income,expense',
             'name' => 'required|string|max:100',
             'icon' => 'nullable|string|max:100',
+            'color' => 'nullable|string|max:9|regex:/^#?[0-9A-Fa-f]{6,8}$/',
         ]);
 
         if ($validator->fails()) {
@@ -39,6 +40,7 @@ class CategoryController extends Controller
             'type' => $request->type,
             'name' => $request->name,
             'icon' => $request->icon ?? 'label',
+            'color' => $request->color,
         ]);
 
         return response()->json($category, 201);

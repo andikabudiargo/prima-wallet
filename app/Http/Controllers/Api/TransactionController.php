@@ -18,7 +18,7 @@ class TransactionController extends Controller
 
     public function index(Request $request)
     {
-        $query = Transaction::with(['wallet', 'category'])
+        $query = Transaction::with(['wallet', 'category', 'invoice'])
             ->where('user_id', $request->user()->id);
 
         if ($request->has('type')) {
@@ -44,6 +44,7 @@ class TransactionController extends Controller
         'description' => 'nullable|string|max:255',
         'transaction_date' => 'required|date',
         'evidence' => 'nullable|image|max:5120',
+        'invoice_id' => 'nullable|exists:invoices,id',
     ]);
 
     if ($validator->fails()) {
@@ -56,6 +57,23 @@ class TransactionController extends Controller
 
     if (!$wallet) {
         return response()->json(['message' => 'Dompet tidak ditemukan'], 404);
+    }
+
+    $invoiceId = null;
+    if ($request->filled('invoice_id')) {
+        if ($type !== 'income') {
+            return response()->json(['message' => 'Invoice hanya bisa dikaitkan ke pemasukan'], 422);
+        }
+
+        $invoice = \App\Models\Invoice::where('id', $request->invoice_id)
+            ->where('user_id', $request->user()->id)
+            ->first();
+
+        if (!$invoice) {
+            return response()->json(['message' => 'Invoice tidak ditemukan'], 404);
+        }
+
+        $invoiceId = $invoice->id;
     }
 
     // pastikan kategori memang milik tipe yang sesuai & bisa diakses user ini
@@ -75,7 +93,7 @@ class TransactionController extends Controller
         $evidencePath = $request->file('evidence')->store('transaction-evidence', 'public');
     }
 
-    $transaction = DB::transaction(function () use ($request, $wallet, $evidencePath, $type, $category) {
+    $transaction = DB::transaction(function () use ($request, $wallet, $evidencePath, $type, $category, $invoiceId) {
         $transaction = Transaction::create([
             'user_id' => $request->user()->id,
             'wallet_id' => $wallet->id,
@@ -86,6 +104,7 @@ class TransactionController extends Controller
             'evidence_path' => $evidencePath,
             'transaction_date' => $request->transaction_date,
             'created_by' => $request->user()->id,
+            'invoice_id' => $invoiceId,
         ]);
 
         if ($type === 'income') {
@@ -97,7 +116,7 @@ class TransactionController extends Controller
         return $transaction;
     });
 
-    return response()->json($transaction->load(['wallet', 'category']), 201);
+    return response()->json($transaction->load(['wallet', 'category', 'invoice']), 201);
 }
 
     public function show(Request $request, Transaction $transaction)

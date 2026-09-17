@@ -130,6 +130,43 @@ class AuthController extends Controller
         return response()->json($user->fresh());
     }
 
+    /**
+     * Profil usaha dipakai sebagai kop invoice (nama, tagline, alamat, no.
+     * HP, logo) - diisi sekali di sini, dipakai berulang tiap generate
+     * invoice baru.
+     */
+    public function updateBusinessProfile(Request $request)
+    {
+        $user = $request->user();
+
+        $validator = Validator::make($request->all(), [
+            'business_name' => 'nullable|string|max:150',
+            'business_tagline' => 'nullable|string|max:150',
+            'business_address' => 'nullable|string|max:255',
+            'business_phone' => 'nullable|string|max:30',
+            'logo' => 'nullable|image|max:2048',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $data = [
+            'business_name' => $request->business_name,
+            'business_tagline' => $request->business_tagline,
+            'business_address' => $request->business_address,
+            'business_phone' => $request->business_phone,
+        ];
+
+        if ($request->hasFile('logo')) {
+            $data['business_logo_path'] = $request->file('logo')->store('business-logo', 'public');
+        }
+
+        $user->update($data);
+
+        return response()->json($user->fresh());
+    }
+
     public function changePassword(Request $request)
     {
         $user = $request->user();

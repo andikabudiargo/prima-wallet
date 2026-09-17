@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\RecurringTransactionController;
 use App\Http\Controllers\Api\AssetController;
 use App\Http\Controllers\Api\TargetController;
 use App\Http\Controllers\Api\AnalyticsController;
+use App\Http\Controllers\Api\InvoiceController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/register', [AuthController::class, 'register']);
@@ -23,6 +24,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', [AuthController::class, 'me']);
     Route::put('/user/profile', [AuthController::class, 'updateProfile']);
     Route::put('/user/password', [AuthController::class, 'changePassword']);
+    Route::post('/business-profile', [AuthController::class, 'updateBusinessProfile']);
     Route::post('/logout', [AuthController::class, 'logout']);
 
     Route::apiResource('wallets', WalletController::class);
@@ -61,4 +63,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/analytics/monthly-trend', [AnalyticsController::class, 'monthlyTrend']);
     Route::get('/analytics/yearly-trend', [AnalyticsController::class, 'yearlyTrend']);
     Route::get('/analytics/top-overbudget', [AnalyticsController::class, 'topOverbudget']);
+
+    Route::apiResource('invoices', InvoiceController::class)->only(['index', 'store', 'show', 'destroy']);
 });

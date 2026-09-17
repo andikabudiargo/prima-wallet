@@ -14,6 +14,7 @@ class Transaction extends Model
         'user_id', 'wallet_id', 'type', 'category_id', 'amount',
         'description', 'evidence_path', 'transaction_date', 'created_by',
         'debt_id', 'debt_installment_id', 'checklist_run_item_id', 'recurring_transaction_id',
+        'invoice_id',
     ];
 
     protected $casts = [
@@ -60,5 +61,10 @@ class Transaction extends Model
     public function recurringTransaction()
     {
         return $this->belongsTo(RecurringTransaction::class);
+    }
+
+    public function invoice()
+    {
+        return $this->belongsTo(Invoice::class);
     }
 }
