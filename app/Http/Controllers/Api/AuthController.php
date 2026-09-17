@@ -42,14 +42,17 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $request->validate([
-            'email' => 'required|email',
+            'login' => 'required|string',
             'password' => 'required',
         ]);
 
-        $user = User::where('email', $request->email)->first();
+        $identifier = trim($request->login);
+        $user = User::where('email', $identifier)
+            ->orWhere('prima_id', strtolower($identifier))
+            ->first();
 
         if (! $user || ! $user->password || ! Hash::check($request->password, $user->password)) {
-            return response()->json(['message' => 'Email atau password salah'], 401);
+            return response()->json(['message' => 'Email/Prima ID atau password salah'], 401);
         }
 
         $token = $user->createToken('flutter-app')->plainTextToken;
@@ -116,6 +119,42 @@ class AuthController extends Controller
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users,email,'.$user->id,
+            'prima_id' => [
+                'nullable', 'string', 'min:4', 'max:20', 'regex:/^[a-zA-Z0-9_]+$/',
+                'unique:users,prima_id,'.$user->id,
+            ],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $data = [
+            'name' => $request->name,
+            'email' => $request->email,
+        ];
+
+        // Hanya sentuh prima_id kalau field-nya memang dikirim - string kosong
+        // berarti sengaja dikosongkan, tidak dikirim sama sekali berarti
+        // biarkan nilai lama tetap ada.
+        if ($request->has('prima_id')) {
+            $data['prima_id'] = $request->prima_id === '' ? null : strtolower($request->prima_id);
+        }
+
+        $user->update($data);
+
+        return response()->json($user->fresh());
+    }
+
+    /**
+     * Foto profil - dipisah dari updateProfile karena butuh multipart upload.
+     */
+    public function updateAvatar(Request $request)
+    {
+        $user = $request->user();
+
+        $validator = Validator::make($request->all(), [
+            'avatar' => 'required|image|max:2048',
         ]);
 
         if ($validator->fails()) {
@@ -123,8 +162,7 @@ class AuthController extends Controller
         }
 
         $user->update([
-            'name' => $request->name,
-            'email' => $request->email,
+            'avatar_path' => $request->file('avatar')->store('avatars', 'public'),
         ]);
 
         return response()->json($user->fresh());
